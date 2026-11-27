@@ -4,8 +4,11 @@
 [![macOS CI](https://github.com/martona/clipp/actions/workflows/macos-ci.yml/badge.svg)](https://github.com/martona/clipp/actions/workflows/macos-ci.yml)
 [![iOS CI](https://github.com/martona/clipp/actions/workflows/ios-ci.yml/badge.svg)](https://github.com/martona/clipp/actions/workflows/ios-ci.yml)
 [![Linux CI](https://github.com/martona/clipp/actions/workflows/linux-ci.yml/badge.svg)](https://github.com/martona/clipp/actions/workflows/linux-ci.yml)
+[![Android CI](https://github.com/rastafaa/clipp-android/actions/workflows/android-ci.yml/badge.svg)](https://github.com/rastafaa/clipp-android/actions/workflows/android-ci.yml)
 
-Clipp is a free, open source, peer-to-peer clipboard sync utility for Windows, macOS, and iOS, with a terminal-only client for Linux. It is built for devices you trust, on a network you control, sharing clipboard text and images without routing your clipboard through the cloud. Having said that, security (mutual authentication and encryption) is [not an afterthought](docs/SECURITY-MODEL.md). The terminal is a first-class citizen and in addition to a GUI, Clipp also supports `clipp copy` and `clipp paste` - think `pbcopy` but network-enabled.
+> **About this fork: Clipp for Android.** This is an unofficial fork of [martona/clipp](https://github.com/martona/clipp) that adds an Android app. It runs the same C++ sync core as the other platforms, so it joins your existing group with the same group name and passphrase and syncs with Windows, macOS, iOS and Linux devices. Incoming items land on the phone's clipboard automatically; send from the app, a Quick Settings tile, the notification, or the share sheet. History items can be deleted on all devices, with undo. Grab the APK from the latest [Android CI run](https://github.com/rastafaa/clipp-android/actions/workflows/android-ci.yml) (Artifacts), and see [android/README.md](android/README.md) for details. Everything else below is the upstream project's documentation.
+
+Clipp is a free, open source, peer-to-peer clipboard sync utility for Windows, macOS, iOS, and Android (Android via this fork), with a terminal-only client for Linux. It is built for devices you trust, on a network you control, sharing clipboard text and images without routing your clipboard through the cloud. Having said that, security (mutual authentication and encryption) is [not an afterthought](docs/SECURITY-MODEL.md). The terminal is a first-class citizen and in addition to a GUI, Clipp also supports `clipp copy` and `clipp paste` - think `pbcopy` but network-enabled.
 
 I wrote Clipp because I needed this exact thing, and the usual options kept failing: not open source, cloud-dependent, not free, or folded into a larger kitchen-sink app whose job was not just clipboard sync. Clipp tries to stay lean: discover nearby peers, verify device trust, move clipboard data directly, and otherwise stay out of the way.
 
@@ -53,6 +56,7 @@ Clipp's trust model is deliberately narrow - your own devices, on a local or ove
 | macOS    | Apple Silicon   | macOS 14*       | On the [Mac App Store][app-store-mac]; Intel Macs are not supported. |
 | iOS      | arm64           | iOS 16          | Free on the [App Store][app-store-ios].                              |
 | Linux    | amd64, arm64    | glibc 2.31†     | Terminal client only (`clipp copy`/`paste`); no GUI, no tray.        |
+| Android  | arm64           | Android 9       | This fork only; sideloaded APK from [Android CI][android-ci].         |
 
 \* The 14 floor is arbitrary; I just don't have older Macs or Intel hardware to test on. PRs to lower the minimum are welcome.
 
@@ -86,6 +90,7 @@ Direct download links below always point at the **latest published release** —
 [lin-amd64-bin]: https://github.com/martona/clipp/releases/latest/download/clipp-linux-amd64
 [lin-arm64-bin]: https://github.com/martona/clipp/releases/latest/download/clipp-linux-arm64
 
+[android-ci]: https://github.com/rastafaa/clipp-android/actions/workflows/android-ci.yml
 [app-store-ios]: https://apps.apple.com/us/app/clipp-net/id6773113533
 [app-store-mac]: https://apps.apple.com/us/app/clipp-net/id6773113533?platform=mac
 
@@ -110,6 +115,10 @@ Alternatively install from the [Mac App Store][app-store-mac], or download the [
 Clipp is free on the App Store:
 
 <a href="https://apps.apple.com/us/app/clipp-net/id6773113533"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download Clipp on the App Store" height="40"></a>
+
+### Android (this fork)
+
+Open the latest successful [Android CI run][android-ci], download `clipp-android-apk` from its Artifacts, extract it, and install the `.apk` (Android will ask you to allow installs from your browser or file manager). Open Clipp and join your group with the same group name and passphrase as your other devices. Builds are signed with a stable key, so updates install over the previous version.
 
 ### Linux
 
@@ -193,6 +202,7 @@ Single-line text without whitespace is treated as a password and shown masked in
 
 - **Windows**: Clipp lives in the system tray. *Minimize to Tray* hides the window but keeps Clipp running (same as the window close button); *Exit Clipp* shuts it down entirely.
 - **macOS**: Clipp lives in the menu bar. Same minimize/exit semantics as Windows.
+- **Android** (this fork): a background service with a small persistent notification keeps Clipp connected and puts incoming items on the clipboard; it can be turned off in the app's menu, in which case Clipp syncs only while open and catches up on missed history when you return. Android only lets the focused app read the clipboard, so send with the app's *Send clipboard* button, the *Send clipboard* Quick Settings tile, the notification action, or the share sheet. Swipe an item left to delete it on all devices (with undo), or right to reveal masked text.
 - **iOS**: Clipp is a foreground app. Background clipboard sync is limited by iOS's restrictions on background clipboard and network access. A Share Extension puts Clipp in the iOS Share sheet — tap Share on any text or image and select Clipp to send it to your devices. Alternatively, open the app and tap *Send* to share whatever's on the clipboard right now, or tap any item in the activity stream to copy it back.
 
 ### Command line
@@ -301,6 +311,8 @@ No catch. Clipp is open source under the MIT license - read it, build it, and ru
 **Does Linux have a GUI? What about Android?**
 
 Linux ships as a **terminal-only** client - `clipp copy` / `clipp paste` - with no GUI, tray, or local-clipboard reading. That's a deliberate fit for the place a headless Clipp is most useful: servers, containers, and SSH sessions, where it joins the encrypted network and relays clipboard text through your desktop peers. A full Linux *desktop* GUI isn't planned — clipboard semantics vary widely across X11/Wayland and desktop environments, which is a much larger investment than the headless client was. Android isn't in scope either (it isn't in my life). If you have a strong use case for either, open an issue.
+
+*Fork note:* this fork ([rastafaa/clipp-android](https://github.com/rastafaa/clipp-android)) adds an Android app; see the note at the top of this page.
 
 **Can I sync between devices on different networks?**
 
