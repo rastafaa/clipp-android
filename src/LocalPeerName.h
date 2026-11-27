@@ -2,6 +2,7 @@
 
 #include "platform.h"
 
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
@@ -51,6 +52,13 @@ inline std::string GetLocalPeerDisplayName(const char* fallback = "unknown", std
         }
     }
     return local_peer_name_detail::TruncateForCString(fallback != nullptr ? fallback : "iPhone", maxBytes);
+#elif defined(__ANDROID__)
+    // gethostname() is "localhost" on Android; the app exports the user-visible
+    // device name (Settings > About phone) before loading the native library.
+    if (const char* name = std::getenv("CLIPP_DEVICE_NAME"); name != nullptr && name[0] != '\0') {
+        return local_peer_name_detail::TruncateForCString(name, maxBytes);
+    }
+    return local_peer_name_detail::TruncateForCString(fallback != nullptr ? fallback : "Android", maxBytes);
 #else
     return local_peer_name_detail::PosixHostName(fallback, maxBytes);
 #endif

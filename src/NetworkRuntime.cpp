@@ -14,7 +14,9 @@
 #include "Settings.h"
 #include "utils.h"
 
-#if defined(__APPLE__) && (TARGET_OS_IPHONE || TARGET_OS_SIMULATOR)
+// iOS and Android share the mobile receive path: incoming items go to the app
+// bridge (activity store + platform clipboard) instead of the desktop ClipboardActions.
+#if (defined(__APPLE__) && (TARGET_OS_IPHONE || TARGET_OS_SIMULATOR)) || defined(__ANDROID__)
 #define CLIPP_IOS_CLIPBOARD_RECEIVE_STUB 1
 void CLPIOSReceiveClipboardPayload(std::shared_ptr<const ClipboardPayload> payload);
 #else

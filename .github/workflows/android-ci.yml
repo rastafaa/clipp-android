@@ -1,0 +1,91 @@
+name: Android CI
+
+# Builds the Android app (android/) into an installable APK. Native deps are
+# built by vcpkg for arm64-android; the shared C++ core in src/ is compiled
+# into libclipp.so by the Gradle/CMake build.
+#
+# Signing: if the ANDROID_KEYSTORE_B64 / ANDROID_KEYSTORE_PASSWORD secrets are
+# set, the APK is signed with that stable key so each build installs over the
+# last. Otherwise a throwaway debug key is used (uninstall before updating).
+
+on:
+  push:
+    branches: [android, master]
+    paths: [android/**, src/**, .github/workflows/android-ci.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      NDK_VERSION: 27.2.12479018
+      VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg-cache
+      VCPKG_TRIPLET: arm64-android-release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install NDK and CMake
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" "cmake;3.22.1" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Cache vcpkg binaries
+        uses: actions/cache@v4
+        with:
+          path: vcpkg-cache
+          key: vcpkg-android-${{ hashFiles('android/native-deps/vcpkg.json') }}
+
+      - name: Build native dependencies (vcpkg)
+        run: |
+          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+          git clone -q https://github.com/microsoft/vcpkg "$VCPKG_ROOT"
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
+          "$VCPKG_ROOT/vcpkg" install \
+            --x-manifest-root=android/native-deps \
+            --x-install-root="$RUNNER_TEMP/deps" \
+            --triplet "$VCPKG_TRIPLET"
+          ls "$RUNNER_TEMP/deps/$VCPKG_TRIPLET/lib"
+
+      - name: Prepare signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/clipp.keystore"
+            echo "SIGNING_ARGS=-PclippKeystore=$RUNNER_TEMP/clipp.keystore" >> "$GITHUB_ENV"
+          else
+            echo "::warning::ANDROID_KEYSTORE_B64 not set; signing with a throwaway debug key."
+          fi
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.11.1
+
+      - name: Build APK
+        env:
+          ORG_GRADLE_PROJECT_clippKeystorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          gradle -p android assembleRelease --stacktrace \
+            -PclippDepsDir="$RUNNER_TEMP/deps/$VCPKG_TRIPLET" \
+            -PclippVersionCode=${{ github.run_number }} \
+            $SIGNING_ARGS
+          mv android/app/build/outputs/apk/release/app-release.apk "clipp-android-${{ github.run_number }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clipp-android-apk
+          path: clipp-android-*.apk
+          if-no-files-found: error

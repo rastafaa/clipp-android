@@ -16,6 +16,9 @@
 #if !defined(_WIN32)
 #include <unistd.h>  // getpid for the per-launch log filename
 #endif
+#if defined(__ANDROID__)
+#include <android/log.h>
+#endif
 
 Logger g_logger;
 
@@ -380,7 +383,12 @@ void Logger::writeLine(const wchar_t* function, Level level, const wchar_t* mess
     // failbit on the first non-ASCII wide char (a device/network name) and then
     // silently drops ALL subsequent logging. Converting to UTF-8 is locale-
     // independent and preserves the ANSI color escapes (they're ASCII).
+#if defined(__ANDROID__)
+    // stderr goes nowhere in an Android app; route plain lines to logcat.
+    __android_log_write(ANDROID_LOG_INFO, "Clipp", clipp_platform_detail::Utf16ToUtf8String(plainLine).c_str());
+#else
     std::cerr << clipp_platform_detail::Utf16ToUtf8String(wstr);
+#endif
 #else
     std::wcerr << wstr;
 #endif
