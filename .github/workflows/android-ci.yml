@@ -50,6 +50,8 @@ jobs:
 
       - name: Build native dependencies (vcpkg)
         run: |
+          # libsodium's vcpkg port builds with autotools.
+          sudo apt-get install -y -qq autoconf autoconf-archive automake libtool > /dev/null
           mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
           git clone -q https://github.com/microsoft/vcpkg "$VCPKG_ROOT"
           "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
