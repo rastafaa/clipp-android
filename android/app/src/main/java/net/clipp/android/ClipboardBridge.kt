@@ -88,6 +88,8 @@ object ClipboardBridge {
 
     /** Sends content and returns a short result message for a toast. */
     fun send(content: Content): String {
+        // When the core was just started (background sync off), give peers a moment to connect.
+        if (ClippNative.peers().none { it.connected }) SyncControl.awaitPeers()
         val id = ClippNative.nativeSend(content.kind, content.data, content.sensitive)
         return when {
             id == -1L -> "Open Clipp and join your group first"

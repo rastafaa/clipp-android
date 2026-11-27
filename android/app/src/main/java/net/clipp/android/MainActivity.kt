@@ -114,12 +114,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        SyncControl.acquire(this)
+    }
+
+    override fun onStop() {
+        SyncControl.release(this)
+        super.onStop()
+    }
+
     override fun onResume() {
         super.onResume()
         resumeTick++
-        if (ClippNative.keyStatus().hasKey && !ClippService.running) {
-            runCatching { ClippService.start(this) }
-        }
     }
 }
 
@@ -198,7 +205,7 @@ private fun SetupScreen(initialName: String, onPaired: () -> Unit) {
                         busy = false
                         if (result == null) {
                             secret = ""
-                            ClippService.start(context)
+                            SyncControl.apply(context)
                             onPaired()
                         } else {
                             error = result
@@ -252,6 +259,7 @@ private fun HomeScreen(status: ClippNative.KeyStatus, resumeTick: Int, onUnpaire
     var showInfo by remember { mutableStateOf(false) }
     var confirmLeave by remember { mutableStateOf(false) }
     var autoCopy by remember { mutableStateOf(Prefs.autoCopy(context)) }
+    var backgroundSync by remember { mutableStateOf(Prefs.backgroundSync(context)) }
     var hideSecrets by remember { mutableStateOf(ClippNative.nativeMaskSecrets()) }
     var revealedIds by remember { mutableStateOf(setOf<Long>()) }
     val connected = peers.filter { it.connected }
@@ -332,6 +340,15 @@ private fun HomeScreen(status: ClippNative.KeyStatus, resumeTick: Int, onUnpaire
                     IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, "More") }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(
+                            text = { Text("Sync in background") },
+                            trailingIcon = { Switch(checked = backgroundSync, onCheckedChange = null) },
+                            onClick = {
+                                backgroundSync = !backgroundSync
+                                Prefs.setBackgroundSync(context, backgroundSync)
+                                SyncControl.apply(context)
+                            },
+                        )
+                        DropdownMenuItem(
                             text = { Text("Copy incoming automatically") },
                             trailingIcon = { Switch(checked = autoCopy, onCheckedChange = null) },
                             onClick = { autoCopy = !autoCopy; Prefs.setAutoCopy(context, autoCopy) },
@@ -370,7 +387,7 @@ private fun HomeScreen(status: ClippNative.KeyStatus, resumeTick: Int, onUnpaire
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (!ignoringBattery) {
+            if (backgroundSync && !ignoringBattery) {
                 item(key = "battery") {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
                         Column(Modifier.padding(16.dp)) {

@@ -12,11 +12,14 @@ import android.widget.Toast
 class SendClipboardActivity : Activity() {
     private var handled = false
 
+    override fun onDestroy() {
+        SyncControl.release(this)
+        super.onDestroy()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (!ClippService.running && ClippNative.keyStatus().hasKey) {
-            runCatching { ClippService.start(this) }
-        }
+        SyncControl.acquire(this)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

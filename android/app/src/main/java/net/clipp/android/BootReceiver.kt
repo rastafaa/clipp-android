@@ -8,7 +8,7 @@ import android.content.Intent
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
-        if (ClippNative.keyStatus().hasKey) {
+        if (ClippNative.keyStatus().hasKey && Prefs.backgroundSync(context)) {
             runCatching { ClippService.start(context) }
         }
     }

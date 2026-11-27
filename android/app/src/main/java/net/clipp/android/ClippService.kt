@@ -48,7 +48,9 @@ class ClippService : Service() {
         networkCallback?.let {
             runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(it) }
         }
-        ClippNative.worker.execute { ClippNative.nativeStop() }
+        // With background sync turned off while the app is open, the core keeps running
+        // for the app (SyncControl); otherwise it stops with the service.
+        if (!SyncControl.inUse) ClippNative.worker.execute { ClippNative.nativeStop() }
         super.onDestroy()
     }
 

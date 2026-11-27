@@ -33,4 +33,6 @@ object Prefs {
     private fun prefs(context: Context) = context.getSharedPreferences("clipp", Context.MODE_PRIVATE)
     fun autoCopy(context: Context) = prefs(context).getBoolean("autoCopy", true)
     fun setAutoCopy(context: Context, value: Boolean) = prefs(context).edit().putBoolean("autoCopy", value).apply()
+    fun backgroundSync(context: Context) = prefs(context).getBoolean("backgroundSync", true)
+    fun setBackgroundSync(context: Context, value: Boolean) = prefs(context).edit().putBoolean("backgroundSync", value).apply()
 }

@@ -9,11 +9,14 @@ import android.widget.Toast
 
 /** Share-sheet target: sends shared text or an image to your devices. */
 class ShareReceiverActivity : Activity() {
+    override fun onDestroy() {
+        SyncControl.release(this)
+        super.onDestroy()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (!ClippService.running && ClippNative.keyStatus().hasKey) {
-            runCatching { ClippService.start(this) }
-        }
+        SyncControl.acquire(this)
         val intent = intent
         val text = intent.getStringExtra(Intent.EXTRA_TEXT)
         val stream: Uri? = if (Build.VERSION.SDK_INT >= 33) {
