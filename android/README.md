@@ -21,3 +21,7 @@ CI (`.github/workflows/android-ci.yml`) builds a signed APK on every push to
 Locally: build the native deps with vcpkg for `arm64-android-release` from
 `android/native-deps`, then
 `gradle -p android assembleRelease -PclippDepsDir=<vcpkg_installed>/arm64-android-release`.
+
+Builds are signed with the key in the `ANDROID_KEYSTORE_B64` /
+`ANDROID_KEYSTORE_PASSWORD` repository secrets, so a new APK installs over
+the previous one without losing pairing or history.
