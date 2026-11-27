@@ -44,7 +44,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -331,7 +331,7 @@ private fun HomeScreen(status: ClippNative.KeyStatus, resumeTick: Int, onUnpaire
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { sendClipboard() },
-                icon = { Icon(Icons.Filled.Send, null) },
+                icon = { Icon(Icons.AutoMirrored.Filled.Send, null) },
                 text = { Text("Send clipboard") },
             )
         },
