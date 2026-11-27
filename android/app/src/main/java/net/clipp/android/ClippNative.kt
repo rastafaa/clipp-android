@@ -44,6 +44,8 @@ object ClippNative {
     @JvmStatic external fun nativeDelete(id: Long): Boolean
     @JvmStatic external fun nativeUndoDelete(): Long
     @JvmStatic external fun nativePeers(): ByteArray
+    @JvmStatic external fun nativeMaskSecrets(): Boolean
+    @JvmStatic external fun nativeSetMaskSecrets(mask: Boolean)
     @JvmStatic external fun nativeOnNetworkChanged()
     @JvmStatic external fun nativeMdnsRegistered(name: String)
     @JvmStatic external fun nativeMdnsResolved(name: String, ip: String, port: Int, keys: Array<String>, values: Array<String>)
@@ -65,8 +67,11 @@ object ClippNative {
         val kind: String,
         val sourceMarked: Boolean,
         val preview: String,
+        /** Unmasked preview for private items (empty otherwise). */
+        val revealed: String,
         val linkHost: String,
     ) {
+        val canReveal get() = kind == "private" && revealed.isNotEmpty()
         val isImage get() = kind == "image"
         val isPrivate get() = kind == "private" || kind == "placeholder" || sourceMarked
         val hasContent get() = kind != "placeholder" && kind != "unsupported"
@@ -100,6 +105,7 @@ object ClippNative {
                 kind = o.optString("kind"),
                 sourceMarked = o.optBoolean("marked"),
                 preview = o.optString("preview"),
+                revealed = o.optString("revealed"),
                 linkHost = o.optString("host"),
             )
         }.sortedByDescending { it.timestampMs }

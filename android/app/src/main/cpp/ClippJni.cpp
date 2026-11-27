@@ -509,6 +509,7 @@ CLIPP_JNI(jbyteArray, nativeItems)(JNIEnv* env, jclass) {
                 ",\"kind\":\"" + KindName(display->kind) + "\"" +
                 ",\"marked\":" + (display->sourceMarked ? "true" : "false") +
                 ",\"preview\":" + JsonString(Utf8(display->previewText)) +
+                ",\"revealed\":" + JsonString(Utf8(display->revealedPreviewText)) +
                 ",\"host\":" + JsonString(Utf8(display->linkHost)) + "}";
     }
     json += "]";
@@ -634,6 +635,16 @@ CLIPP_JNI(jbyteArray, nativePeers)(JNIEnv* env, jclass) {
     }
     json += "]";
     return ToJavaBytes(env, json);
+}
+
+// Whether short single-word text (likely a password) is masked in the history.
+// A core setting shared with the desktop's "mask short text previews" option.
+CLIPP_JNI(jboolean, nativeMaskSecrets)(JNIEnv*, jclass) {
+    return g_settings.maskShortTextPreviews() ? JNI_TRUE : JNI_FALSE;
+}
+
+CLIPP_JNI(void, nativeSetMaskSecrets)(JNIEnv*, jclass, jboolean mask) {
+    g_settings.set_maskShortTextPreviews(mask == JNI_TRUE);
 }
 
 CLIPP_JNI(void, nativeOnNetworkChanged)(JNIEnv*, jclass) {

@@ -252,6 +252,8 @@ private fun HomeScreen(status: ClippNative.KeyStatus, resumeTick: Int, onUnpaire
     var showInfo by remember { mutableStateOf(false) }
     var confirmLeave by remember { mutableStateOf(false) }
     var autoCopy by remember { mutableStateOf(Prefs.autoCopy(context)) }
+    var hideSecrets by remember { mutableStateOf(ClippNative.nativeMaskSecrets()) }
+    var revealedIds by remember { mutableStateOf(setOf<Long>()) }
     val connected = peers.filter { it.connected }
 
     fun sendClipboard() {
@@ -274,6 +276,18 @@ private fun HomeScreen(status: ClippNative.KeyStatus, resumeTick: Int, onUnpaire
             }
             // Android 13+ shows its own "Copied" confirmation.
             if (Build.VERSION.SDK_INT < 33) snackbar.showSnackbar("Copied")
+        }
+    }
+
+    fun toggleReveal(item: ClippNative.Item) {
+        if (item.id in revealedIds) {
+            revealedIds = revealedIds - item.id
+            return
+        }
+        revealedIds = revealedIds + item.id
+        scope.launch {
+            kotlinx.coroutines.delay(30_000)  // re-hide automatically
+            revealedIds = revealedIds - item.id
         }
     }
 
@@ -321,6 +335,20 @@ private fun HomeScreen(status: ClippNative.KeyStatus, resumeTick: Int, onUnpaire
                             text = { Text("Copy incoming automatically") },
                             trailingIcon = { Switch(checked = autoCopy, onCheckedChange = null) },
                             onClick = { autoCopy = !autoCopy; Prefs.setAutoCopy(context, autoCopy) },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Hide secret text") },
+                            trailingIcon = { Switch(checked = hideSecrets, onCheckedChange = null) },
+                            onClick = {
+                                hideSecrets = !hideSecrets
+                                revealedIds = emptySet()
+                                scope.launch {
+                                    items = withContext(Dispatchers.IO) {
+                                        ClippNative.nativeSetMaskSecrets(hideSecrets)
+                                        ClippNative.items()
+                                    }
+                                }
+                            },
                         )
                         DropdownMenuItem(text = { Text("Group & devices") }, onClick = { menuOpen = false; showInfo = true })
                         DropdownMenuItem(text = { Text("Leave group") }, onClick = { menuOpen = false; confirmLeave = true })
@@ -373,8 +401,20 @@ private fun HomeScreen(status: ClippNative.KeyStatus, resumeTick: Int, onUnpaire
                 }
             }
             items(items, key = { it.id }) { item ->
-                SwipeToDelete(onDelete = { delete(item) }) {
-                    ItemCard(item, onClick = { if (item.hasContent) copy(item) }, onDelete = { delete(item) })
+                val revealable = item.canReveal && hideSecrets
+                val revealed = item.canReveal && (!hideSecrets || item.id in revealedIds)
+                SwipeToDelete(
+                    onDelete = { delete(item) },
+                    onReveal = if (revealable) ({ toggleReveal(item) }) else null,
+                    revealed = revealed,
+                ) {
+                    ItemCard(
+                        item,
+                        revealed = revealed,
+                        onClick = { if (item.hasContent) copy(item) },
+                        onToggleReveal = if (revealable) ({ toggleReveal(item) }) else null,
+                        onDelete = { delete(item) },
+                    )
                 }
             }
         }
@@ -430,31 +470,66 @@ private fun HomeScreen(status: ClippNative.KeyStatus, resumeTick: Int, onUnpaire
     }
 }
 
+/** Swipe left deletes; swipe right (private items only) toggles reveal and springs back. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SwipeToDelete(onDelete: () -> Unit, content: @Composable () -> Unit) {
+private fun SwipeToDelete(
+    onDelete: () -> Unit,
+    onReveal: (() -> Unit)?,
+    revealed: Boolean,
+    content: @Composable () -> Unit,
+) {
     val state = rememberSwipeToDismissBoxState(confirmValueChange = { value ->
-        if (value == SwipeToDismissBoxValue.EndToStart) { onDelete(); true } else false
+        when (value) {
+            SwipeToDismissBoxValue.EndToStart -> { onDelete(); true }
+            SwipeToDismissBoxValue.StartToEnd -> { onReveal?.invoke(); false }
+            else -> false
+        }
     })
     SwipeToDismissBox(
         state = state,
-        enableDismissFromStartToEnd = false,
+        enableDismissFromStartToEnd = onReveal != null,
         backgroundContent = {
+            val reveal = state.dismissDirection == SwipeToDismissBoxValue.StartToEnd
             Box(
                 Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.errorContainer).padding(horizontal = 20.dp),
-                contentAlignment = Alignment.CenterEnd,
-            ) { Icon(Icons.Filled.Delete, "Delete", tint = MaterialTheme.colorScheme.onErrorContainer) }
+                    .background(if (reveal) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.errorContainer)
+                    .padding(horizontal = 20.dp),
+                contentAlignment = if (reveal) Alignment.CenterStart else Alignment.CenterEnd,
+            ) {
+                if (reveal) {
+                    Text(
+                        if (revealed) "Hide" else "Show",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                } else {
+                    Icon(Icons.Filled.Delete, "Delete", tint = MaterialTheme.colorScheme.onErrorContainer)
+                }
+            }
         },
     ) { content() }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ItemCard(item: ClippNative.Item, onClick: () -> Unit, onDelete: () -> Unit) {
+private fun ItemCard(
+    item: ClippNative.Item,
+    revealed: Boolean,
+    onClick: () -> Unit,
+    onToggleReveal: (() -> Unit)?,
+    onDelete: () -> Unit,
+) {
     var menu by remember { mutableStateOf(false) }
+    // Items sent from this phone get a tinted card and an explicit "Sent" label.
+    val colors = if (item.outgoing) {
+        CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f))
+    } else {
+        CardDefaults.cardColors()
+    }
     Card(
         shape = RoundedCornerShape(12.dp),
+        colors = colors,
         modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = { menu = true }),
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -469,24 +544,43 @@ private fun ItemCard(item: ClippNative.Item, onClick: () -> Unit, onDelete: () -
                         )
                         Spacer(Modifier.width(6.dp))
                     }
+                    val text = when {
+                        revealed -> item.revealed
+                        item.preview.isNotEmpty() -> item.preview
+                        item.kind == "placeholder" -> "Private item"
+                        else -> "Unsupported item"
+                    }
                     Text(
-                        item.preview.ifEmpty { if (item.kind == "placeholder") "Private item" else "Unsupported item" },
+                        text,
                         style = MaterialTheme.typography.bodyLarge,
+                        fontFamily = if (revealed) FontFamily.Monospace else null,
                         maxLines = 4,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
             Spacer(Modifier.height(6.dp))
-            Text(
-                "${if (item.outgoing) "This phone" else item.device} · " +
-                    DateUtils.getRelativeTimeSpanString(item.timestampMs, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (item.outgoing) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Send, null, Modifier.size(12.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.width(4.dp))
+                }
+                Text(
+                    (if (item.outgoing) "Sent from this phone" else "From ${item.device}") + " · " +
+                        DateUtils.getRelativeTimeSpanString(item.timestampMs, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (item.outgoing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             if (item.hasContent) DropdownMenuItem(text = { Text("Copy") }, onClick = { menu = false; onClick() })
+            if (onToggleReveal != null) {
+                DropdownMenuItem(text = { Text(if (revealed) "Hide" else "Show") }, onClick = { menu = false; onToggleReveal() })
+            }
             DropdownMenuItem(text = { Text("Delete on all devices") }, onClick = { menu = false; onDelete() })
         }
     }
