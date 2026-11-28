@@ -11,6 +11,8 @@
 
 #include "ClipboardPayload.h"
 #include "Listener.h"
+#include "HostId.h"
+#include "OsType.h"
 #include "MDNSDiscovery.h"
 
 class NetworkRuntime {
@@ -66,3 +68,12 @@ private:
 };
 
 extern NetworkRuntime g_networkRuntime;
+
+// Connect-back (fork addition). Called by an incoming Peer once the remote has
+// authenticated. Clipp connections carry items one way only (the dialer sends),
+// so a device that can reach us but that we never discovered over DNS-SD
+// (multicast filtered by the Wi-Fi/LAN bridge, a router quirk, etc.) would
+// otherwise receive nothing from us. If discovery isn't already tracking that
+// host, we dial it back at its address on our configured TCP port.
+void NetworkRuntimeNoteAuthenticatedIncoming(const HostId& hostId, const std::string& hostNameUtf8,
+                                             OsType osType, const std::string& ipUtf8);

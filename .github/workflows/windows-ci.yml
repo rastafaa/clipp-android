@@ -143,3 +143,13 @@ jobs:
       # runs against the INSTALLED, signed MSIX: the only configuration in which uiAccess is
       # actually granted (WindowsApps is a secure path), which is what winget's validation
       # exercises.
+
+      # Fork addition: publish the unsigned build so it can be downloaded and run.
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: clipp-windows-${{ matrix.arch }}
+          path: |
+            build/windows-release/clipp.exe
+            build/windows-release/clipp.com
+          if-no-files-found: error

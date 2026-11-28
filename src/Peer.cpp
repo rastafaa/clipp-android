@@ -23,6 +23,7 @@
 #include "utils.h"
 #include "utils_socket.h"
 #include "PeerManager.h"
+#include "NetworkRuntime.h"
 #include "RegisterConfig.h"
 #include "RegisterStore.h"
 #include "RegisterWire.h"
@@ -873,6 +874,8 @@ void Peer::ThreadProcRecv() {
 		}
 
 		log(__FUNCTION__, Logger::Level::Info, L"Client connected");
+		NetworkRuntimeNoteAuthenticatedIncoming(remoteHostId, remoteHostNameUtf8, channel.RemoteOsType(),
+			WideToUtf8String(ip()));
 
 		// Activity-stream sync trigger. If this is the first established incoming
 		// peer, ask them for everything we don't have. Tail GUID anchors the

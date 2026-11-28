@@ -69,6 +69,9 @@ class OutgoingReconciler {
     struct TrackedPeer {
         MDNSDiscovery::DiscoveredPeer peer;
         bool admitted = false;
+        // Learned from an authenticated incoming connection, not DNS-SD (connect-back).
+        // Never gets a discovery Removed; a real discovery event takes it over.
+        bool viaIncoming = false;
     };
 
 public:
@@ -96,6 +99,9 @@ public:
                 // Added: a (re)appearance cancels any pending removal for this hostId.
                 pendingRemoval_.erase(peer.hostId);
                 auto it = active_.find(peer.hostId);
+                if (it != active_.end()) {
+                    it->second.viaIncoming = false;  // DNS-SD is authoritative from here on
+                }
                 if (it == active_.end()) {
                     auto inserted = active_.emplace(peer.hostId, TrackedPeer{ peer, false });
                     g_logger.log("Reconciler", Logger::Level::Debug,
@@ -136,6 +142,36 @@ public:
             }
         }
         if (wakeRuntime) wakeRuntime();
+    }
+
+    // Connect-back: a peer authenticated on an incoming connection. If discovery isn't
+    // tracking it, dial it back at that address so items can flow to it too.
+    void OnIncomingAuthenticated(const MDNSDiscovery::DiscoveredPeer& peer) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        // It just reached us, so it's alive: cancel any pending DNS-SD removal.
+        pendingRemoval_.erase(peer.hostId);
+        auto it = active_.find(peer.hostId);
+        if (it != active_.end()) {
+            if (!it->second.viaIncoming || it->second.peer.ip == peer.ip) {
+                if (!it->second.admitted) {
+                    const auto admission = ForwardAddPeer(it->second.peer);
+                    it->second.admitted = admission != PeerManager::OutgoingPeerAdmission::RejectedPeerLimit;
+                }
+                return;
+            }
+            // Connect-back target moved to a new address: re-point.
+            if (it->second.admitted) {
+                g_peerManager.RemoveOutgoingPeer(peer.hostId);
+            }
+            it->second.peer = peer;
+        } else {
+            it = active_.emplace(peer.hostId, TrackedPeer{ peer, false, true }).first;
+        }
+        g_logger.log("Reconciler", Logger::Level::Info,
+            "Peer '%s' connected to us from %s but was not discovered via DNS-SD; connecting back on port %hu.",
+            peer.deviceName.c_str(), peer.ip.c_str(), peer.port);
+        const auto admission = ForwardAddPeer(peer);
+        it->second.admitted = admission != PeerManager::OutgoingPeerAdmission::RejectedPeerLimit;
     }
 
     void Sweep(std::chrono::steady_clock::time_point now) {
@@ -542,4 +578,18 @@ void NetworkRuntime::OnDiscoveryEvent(MDNSDiscovery::Event event, const MDNSDisc
     }
 
     Reconciler().OnEvent(event, peer);
+}
+
+void NetworkRuntimeNoteAuthenticatedIncoming(const HostId& hostId, const std::string& hostNameUtf8,
+                                             OsType osType, const std::string& ipUtf8) {
+    if (ipUtf8.empty() || ipUtf8.find(':') != std::string::npos) {
+        return;  // outgoing connections are IPv4-only
+    }
+    MDNSDiscovery::DiscoveredPeer peer;
+    peer.hostId = hostId;
+    peer.deviceName = hostNameUtf8;
+    peer.ip = ipUtf8;
+    peer.port = static_cast<uint16_t>(g_settings.tcpPort());
+    peer.osType = osType;
+    Reconciler().OnIncomingAuthenticated(peer);
 }
